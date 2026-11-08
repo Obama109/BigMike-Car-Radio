@@ -24,7 +24,12 @@ function build() {
     width: '100%', height: '100%', videoId: videoId,
     playerVars: { autoplay: 0, controls: 0, playsinline: 1, rel: 0, origin: location.origin },
     events: {
-      onReady: function () { ready = true; queue.splice(0).forEach(function (f) { f(); }); send({ type: 'ready' }); },
+      onReady: function () {
+        ready = true;
+        try { player.setVolume(80); player.unMute(); } catch (e) {}
+        queue.splice(0).forEach(function (f) { f(); });
+        send({ type: 'ready' });
+      },
       onStateChange: function (e) {
         if (e.data === YT.PlayerState.ENDED) send({ type: 'ended' });
         if (e.data === YT.PlayerState.PLAYING) {
@@ -46,7 +51,7 @@ window.addEventListener('message', function (e) {
   var m = e.data || {};
   switch (m.cmd) {
     case 'load': videoId = m.videoId; build(); break;
-    case 'play': run(function () { player.playVideo(); }); break;
+    case 'play': run(function () { try { player.unMute(); player.playVideo(); } catch (e) {} }); break;
     case 'pause': run(function () { player.pauseVideo(); }); break;
     case 'seek': run(function () { player.seekTo(m.t, true); }); break;
     case 'volume': run(function () { player.setVolume(m.v); }); break;
