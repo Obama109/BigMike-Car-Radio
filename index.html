@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>carradio youtube player</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  #p { width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<div id="p"></div>
+<script>
+// Host this file on any https website. The car radio loads it in a hidden frame and talks to it with postMessage.
+// It exists only so YouTube sees a normal web address as the referrer.
+var player = null, ready = false, apiReady = false, videoId = null, queue = [], lastTitle = '';
+
+function send(msg) { msg.source = 'carradio-yt'; parent.postMessage(msg, '*'); }
+function run(fn) { if (ready) fn(); else queue.push(fn); }
+
+function build() {
+  if (player || !apiReady || !videoId) return;
+  player = new YT.Player('p', {
+    width: '100%', height: '100%', videoId: videoId,
+    playerVars: { autoplay: 0, controls: 0, playsinline: 1, rel: 0, origin: location.origin },
+    events: {
+      onReady: function () { ready = true; queue.splice(0).forEach(function (f) { f(); }); send({ type: 'ready' }); },
+      onStateChange: function (e) {
+        if (e.data === YT.PlayerState.ENDED) send({ type: 'ended' });
+        if (e.data === YT.PlayerState.PLAYING) {
+          try {
+            var t = player.getVideoData().title;
+            if (t && t !== lastTitle) { lastTitle = t; send({ type: 'title', title: t }); }
+          } catch (err) {}
+        }
+      },
+      onError: function (e) { send({ type: 'error', code: e.data }); }
+    }
+  });
+}
+
+window.onYouTubeIframeAPIReady = function () { apiReady = true; build(); };
+
+window.addEventListener('message', function (e) {
+  if (e.source !== parent) return;
+  var m = e.data || {};
+  switch (m.cmd) {
+    case 'load': videoId = m.videoId; build(); break;
+    case 'play': run(function () { player.playVideo(); }); break;
+    case 'pause': run(function () { player.pauseVideo(); }); break;
+    case 'seek': run(function () { player.seekTo(m.t, true); }); break;
+    case 'volume': run(function () { player.setVolume(m.v); }); break;
+  }
+});
+
+setInterval(function () {
+  if (!ready) return;
+  try { send({ type: 'time', t: player.getCurrentTime(), d: player.getDuration() }); } catch (err) {}
+}, 500);
+</script>
+<script src="https://www.youtube.com/iframe_api"></script>
+</body>
+</html>
